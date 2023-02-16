@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="C:/Users/evera/Downloads/CovidDeaths.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="structure browser pragmas query" current="3"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="125"/><column_width id="3" width="13403"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><current_table name="4,14:mainpop_vaccinated"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="CovidDeaths" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_"><sort><column index="4" mode="0"/></sort><column_widths><column index="1" value="92"/><column index="2" value="92"/><column index="3" value="95"/><column index="4" value="93"/><column index="5" value="108"/><column index="6" value="104"/><column index="7" value="201"/><column index="8" value="119"/><column index="9" value="115"/><column index="10" value="212"/><column index="11" value="216"/><column index="12" value="212"/><column index="13" value="300"/><column index="14" value="227"/><column index="15" value="223"/><column index="16" value="300"/><column index="17" value="166"/><column index="18" value="116"/><column index="19" value="224"/><column index="20" value="133"/><column index="21" value="241"/><column index="22" value="213"/><column index="23" value="300"/><column index="24" value="230"/><column index="25" value="300"/><column index="26" value="99"/><column index="27" value="103"/><column index="28" value="234"/><column index="29" value="230"/><column index="30" value="196"/><column index="31" value="300"/><column index="32" value="123"/><column index="33" value="140"/><column index="35" value="168"/><column index="36" value="171"/><column index="37" value="220"/><column index="38" value="164"/><column index="39" value="261"/><column index="40" value="290"/><column index="41" value="293"/><column index="42" value="300"/><column index="43" value="300"/><column index="44" value="158"/><column index="45" value="103"/><column index="46" value="177"/><column index="47" value="115"/><column index="48" value="140"/><column index="49" value="140"/><column index="50" value="145"/><column index="51" value="157"/><column index="52" value="206"/><column index="53" value="187"/><column index="54" value="151"/><column index="55" value="134"/><column index="56" value="208"/><column index="57" value="262"/><column index="58" value="145"/><column index="59" value="250"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats><column index="4" value=""/></display_formats><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="CovidVaccinations" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_"><sort><column index="4" mode="1"/></sort><column_widths/><filter_values/><conditional_formats/><row_id_formats/><display_formats><column index="4" value=""/></display_formats><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="pop_vaccinated" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_"><sort/><column_widths><column index="1" value="92"/><column index="2" value="95"/><column index="3" value="93"/><column index="4" value="103"/><column index="5" value="164"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1">-- Entirety
+SELECT *
+FROM CovidDeaths
+WHERE continent IS NOT NULL
+
+-- Total cases vs total deaths
+-- Shows likelihood of dying if infected
+SELECT location, date, total_cases, total_deaths, ((total_deaths*1.0)/(total_cases)*1.0)*100 AS DeathPercentage
+FROM CovidDeaths
+WHERE location = 'Malaysia'
+
+-- Looking at total cases vs population
+-- Shows percentage of population infected
+SELECT location, date, population, total_cases, ((total_cases*1.0)/(population*1.0))*100 AS percentage_population
+FROM CovidDeaths
+WHERE location = 'Malaysia'
+
+-- Looking at country with highest infection rate vs population
+SELECT location, population, MAX(total_cases) as highest_infection, MAX((total_cases*1.0)/(population*1.0))*100 AS percentage_population_infected
+FROM CovidDeaths
+
+-- Looking at continents with highest death count
+SELECT continent, MAX(cast(total_deaths as INT)) AS total_death_count
+FROM CovidDeaths
+WHERE continent IS NOT NULL
+GROUP BY continent
+ORDER BY total_death_count DESC
+
+-- Global numbers
+SELECT SUM(new_cases) AS total_cases, SUM(cast(new_deaths AS INTEGER)) AS total_deaths, (SUM(new_deaths*1.0)/SUM(new_cases*1.0))*100 AS DeathPercentage
+FROM CovidDeaths
+WHERE continent IS NOT NULL
+ORDER BY date, total_cases
+
+-- Joining both tables
+
+SELECT *
+FROM CovidDeaths AS dea
+JOIN CovidVaccinations AS vac
+	ON dea.location = vac.location
+	AND dea.date = vac.date
+
+-- Looking at total population vs vaccinations
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+FROM CovidDeaths AS dea
+JOIN CovidVaccinations AS vac
+	ON dea.location = vac.location
+	AND dea.date = vac.date
+WHERE dea.continent IS NOT NULL
+
+-- Looking at total population vs vaccinations (per day, rolling calculation)
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, 
+SUM(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location, dea.date) AS rolling_count
+FROM CovidDeaths AS dea
+JOIN CovidVaccinations AS vac
+	ON dea.location = vac.location
+	AND dea.date = vac.date
+WHERE dea.continent IS NOT NULL
+
+-- Using CTE
+
+WITH PopvsVac (Continent, Location, Date, Population, new_vaccinations, rolling_count)
+AS
+(
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, 
+SUM(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location, dea.date) AS rolling_count
+FROM CovidDeaths AS dea
+JOIN CovidVaccinations AS vac
+	ON dea.location = vac.location
+	AND dea.date = vac.date
+WHERE dea.continent IS NOT NULL
+)
+SELECT *
+FROM PopvsVac
+
+-- Creating View to store data for alter visualization
+
+CREATE VIEW pop_vaccinated AS
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, 
+SUM(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location, dea.date) AS rolling_count
+FROM CovidDeaths AS dea
+JOIN CovidVaccinations AS vac
+	ON dea.location = vac.location
+	AND dea.date = vac.date
+WHERE dea.continent IS NOT NULL
+
+SELECT *
+FROM pop_vaccinated</sql><current_tab id="0"/></tab_sql></sqlb_project>
